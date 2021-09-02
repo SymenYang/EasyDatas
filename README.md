@@ -1,5 +1,5 @@
 # EasyDatas
-An easy way to build PyTorch datasets. Modularly build data sets and automatically cache processed results
+An easy way to build PyTorch datasets. Modularly build datasets and automatically cache processed results
 
 ## Installation
 ```bash
