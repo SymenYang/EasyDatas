@@ -207,3 +207,10 @@ dmypy.json
 .DS_Store
 Tests/
 Tests/*
+Data/*
+Data
+EasyDatas.code-workspace
+EasyDatas/Prefab/PointCloud
+EasyDatas/Prefab/PointCloud/
+EasyDatas/Prefab/PointCloud/*
+EasyDatas/Datasets/
