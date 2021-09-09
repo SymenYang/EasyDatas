@@ -1,3 +1,4 @@
+import multiprocessing
 from typing import Dict, Iterable,List
 from EasyDatas.Core.Base import EasyDatasBase
 from abc import abstractmethod
@@ -35,15 +36,77 @@ class CachedTransform(EasyDatasBase):
         super()._default_init()
         self.args["need_previous"] = True
         self.args["need_cache"] = True
+        self.args["del_previous"] = True
+
+    def name_args(self):
+        args = super().name_args()
+        args.pop("del_previous")
+        return args
 
     @abstractmethod
+    def deal_a_data(self, data):
+        return super().deal_a_data(data)
+    
+    def _save_cache(self, clean = True):
+        if self.args["del_previous"]:
+            self.previous._EasyDatasBase__datas = []
+        return super()._save_cache(clean=clean)
+
+class ParallelCachedTransform(CachedTransform):
+    def _default_init(self):
+        import multiprocessing
+        self.args["workers"] = self.get_attr("workers",multiprocessing.cpu_count() // 2)
+        return super()._default_init()        
+        
+    def name_args(self):
+        args = super().name_args()
+        args.pop("workers")
+        return args
+
+    def start_dealing(self, iter, start, length, rank):
+        pass
+
+    def after_dealing(self, iter, start, length, rank):
+        pass
+
+    def deal_a_part(self, start, length, rank):
+        self.rank = rank
+        self.auto_get_idx = start
+        for i in range(length):
+            data = self.get()
+            self.start_dealing(start + i, start, length, rank)
+            out_data = self.deal_a_data(data)
+            self.after_dealing(start + i, start, length, rank)
+            if out_data is not None:
+                self.put(out_data)
+        return self._EasyDatasBase__datas
+
+    def deal_datas(self, backend : str = "multiprocessing"):
+        from joblib import Parallel, delayed
+        self.workers = self.args["workers"]
+        length = len(self.previous)
+        if self.workers > length:
+            self.workers = length
+        step = length // self.workers
+        steps = [step] * self.workers
+        steps[-1] += length - sum(steps)
+        datas = Parallel(n_jobs = self.workers,backend=backend)(
+            delayed(self.deal_a_part)(
+                step * worker,
+                steps[worker],
+                worker) for worker in range(self.workers)
+        )
+        import itertools
+        self._EasyDatasBase__datas = list(itertools.chain(*datas))
+        self.data_length = len(self._EasyDatasBase__datas)
+
     def deal_a_data(self, data):
         return super().deal_a_data(data)
 
 class Chain(EasyDatasBase):
     def __init__(self, chain : List[EasyDatasBase], args : dict = {}):
-        self.chain : List[EasyDatasBase] = chain
         super(Chain,self).__init__(args)
+        self.chain : List[EasyDatasBase] = chain
         assert not self.need_cache, "Chain should not have cache."
         assert len(self.chain) > 0, "Empty chain was given to {}.".format(self.__class__.__name__)
         for idx in range(1,len(self.chain)):
@@ -186,9 +249,9 @@ class Stack(Merge):
             finished = finished and dataset.resolve()
         assert finished, "{} shold not need previous dataset".format(self.__class__.__name__)
         self.data_length = 0
-        self.data_lengthes = []
+        self.data_lengthes = [0]
         for item in self.inputs:
-            self.data_length += len(self.inputs)
+            self.data_length += len(item)
             self.data_lengthes.append(self.data_length)
 
         return self._after_resolve()
@@ -196,6 +259,5 @@ class Stack(Merge):
     def __getitem__(self,idx):
         assert self.finished, "Please use {} after {}.resolve()".format(self.__class__.__name__,self.__class__.__name__)
         for input_id in range(len(self.data_lengthes)):
-            if idx < self.data_lengthes[input_id]:
-                continue
-            return self.inputs[input_id][idx - self.data_lengthes[input_id - 1]]
+            if idx >= self.data_lengthes[input_id] and idx < self.data_lengthes[input_id + 1]:
+                return self.inputs[input_id][idx - self.data_lengthes[input_id]]

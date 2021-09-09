@@ -38,7 +38,8 @@ class EasyDatasBase(Dataset):
         self.need_cache = self.args["need_cache"]
         self.need_previous = self.args["need_previous"]
 
-        self.previous : EasyDatasBase = None
+        if not "previous" in dir(self):
+            self.previous = None
         self.auto_get_idx = 0
         self.auto_put_idx = 0
         self.data_length = 0
@@ -48,11 +49,15 @@ class EasyDatasBase(Dataset):
 
         # Get cache file name
         self._cache_str = None
-    
+
     def get_attr(self, name, default):
         if not name in self.args:
             self.args[name] = default
         return self.args[name]
+
+    @staticmethod
+    def _fake_key_lambda(x):
+        return x[0]
 
     @property
     def cache_str(self):
@@ -68,7 +73,7 @@ class EasyDatasBase(Dataset):
                 value = tuple(value)
             assert isinstance(value,collections.Hashable), "Values for key {} in name args need to be hashable".format(key)
             name_lists.append((key,value))
-        name_lists.sort(key = lambda x : x[0])
+        name_lists.sort(key = EasyDatasBase._fake_key_lambda)
         name_str = ""
         for item in name_lists:
             name_str = name_str + "-" + str(item[0]) + "_" + str(item[1])
@@ -247,8 +252,8 @@ class EasyDatasBase(Dataset):
         logging.info("Cache not find")
         return False
 
-    def _save_cache(self):
-        self.clean_datas_overhead(force = True)
+    def _save_cache(self, clean = True):
+        self.clean_datas_overhead(force = clean)
         with self.cache_path.open("wb") as f:
             pickle.dump(self.__datas,f)
 
