@@ -3,15 +3,12 @@ from torch.utils.data import Dataset
 import pickle
 import json
 from pathlib import Path
-import collections
+from collections.abc import Hashable
 import hashlib
 import logging
 import copy
 
 class EasyDatasBase(Dataset):
-    _class_count = 0
-    _global_hash_string = ""
-
     def __init__(self, override_args : dict = {}):
         self.args = {}
 
@@ -44,8 +41,6 @@ class EasyDatasBase(Dataset):
         self.auto_put_idx = 0
         self.data_length = 0
         self.__datas = []
-        self.class_id = self.__class__._class_count
-        self.__class__._class_count += 1
 
         # Get cache file name
         self._cache_str = None
@@ -69,21 +64,16 @@ class EasyDatasBase(Dataset):
         name_lists = []
         for key in name_args:
             value = name_args[key]
-            if isinstance(value, list):
-                value = tuple(value)
-            assert isinstance(value,collections.Hashable), "Values for key {} in name args need to be hashable".format(key)
-            name_lists.append((key,value))
+            assert isinstance(value,Hashable), "Values for key {} in name args need to be hashable".format(key)
+            name_lists.append((str(key),value))
         name_lists.sort(key = EasyDatasBase._fake_key_lambda)
         name_str = ""
         for item in name_lists:
             name_str = name_str + "-" + str(item[0]) + "_" + str(item[1])
 
-        if self.args["readable"]:
-            pass
-        else:
-            md5 = hashlib.md5()
-            md5.update(name_str.encode("utf-8"))
-            name_str = "-" + str(md5.hexdigest())
+        md5 = hashlib.md5()
+        md5.update(name_str.encode("utf-8"))
+        name_str = "-" + str(md5.hexdigest())
 
         name_str = self.__class__.__name__ + name_str
 
@@ -126,13 +116,15 @@ class EasyDatasBase(Dataset):
         """
         ret = {}
         for key in self.args:
-            if isinstance(self.args[key],collections.Hashable):
+            if isinstance(self.args[key],Hashable):
                 if key == "cache_root":
                     continue
                 ret[key] = self.args[key]
                 if isinstance(self.args[key], str):
                     if "/" in self.args[key]:
                         ret[key] = ret[key].replace("/","|")
+            elif isinstance(self.args[key], list):
+                ret[key] = tuple(self.args[key])
         return ret
 
     def deal_datas(self):
@@ -172,12 +164,7 @@ class EasyDatasBase(Dataset):
             return None
         self.auto_get_idx += 1
         if do_copy:
-            try:
-                return copy.deepcopy(self.previous[self.auto_get_idx - 1])
-            except Exception as e:
-                print(self.previous[self.auto_get_idx - 1])
-                print(e)
-                exit(0)
+            return copy.deepcopy(self.previous[self.auto_get_idx - 1])
         else:
             return self.previous[self.auto_get_idx - 1]
 
@@ -263,4 +250,6 @@ class EasyDatasBase(Dataset):
 
     def __getitem__(self,idx):
         assert self.finished, "Please use {} after {}.resolve()".format(self.__class__.__name__,self.__class__.__name__)
+        if idx >= len(self):
+            raise IndexError("The given idx({}) is larger than the data length({})".format(idx, len(self)))
         return self.__datas[idx]

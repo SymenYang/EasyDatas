@@ -151,7 +151,7 @@ class EasyDatasBase
         """
         ret = {}
         for key in self.args:
-            if isinstance(self.args[key],collections.Hashable):
+            if isinstance(self.args[key],collections.abc.Hashable):
                 if key == "cache_root":
                     continue
                 ret[key] = self.args[key]
@@ -163,13 +163,11 @@ class EasyDatasBase
 All EasyDatas module have two functions to deal datas. The first is `deal_datas` and the second is `deal_a_data`. In default, `deal_datas` will send all datas to `deal_a_data` one-by-one and collect the return value as the output of this module. In most situation, customizing `deal_a_data` is safe, clear and enough. But in some other situation, we want to deal all datas by our own, we could override `deal_datas` function. There are two useful functions in `EasyDatasBase` class that will be helpful in `deal_datas`, which are `self.get()`and `self.put()`
 ```python
 class EasyDatasBases:
-    def get(self,idx = None,do_copy = True) -> dict|None:
-        pass
+    def get(self,idx = None,do_copy = True) -> dict|None : pass
 
-    def put(self,data_dict : dict,idx = -1) -> None:
-        pass
+    def put(self,data_dict : dict,idx = -1) -> None : pass
 ```
-If idx is not provided, `get` will automaticaly get datas from previous module one-by-one. If it meets the end, it will return None. A module with no previous module could not use `get` function. If the `do_copy` is set to False, it will directly return previous module's data, which is a reference. Otherwise, it will deep copy the data and return.  
+If idx is not provided, `get` will automaticaly get datas from previous module one-by-one. If it meets the end, it will return None. A module with no previous module could not use `get` function. If the `do_copy` is set to False, it will directly return previous module's data, which is a reference. Otherwise, it will deepcopy the data and return.  
 `put` function will automaticaly put datas in to return and cache list. if idx is provided, the `data_dict` will be put in to the position. The total number of datas will be count automaticaly in `put` function.  
 Besides, in `deal_a_data` function, one can use `put` functions and return None for increasing the data items. 
 
@@ -180,6 +178,9 @@ Defined base functions, logging and default processing
 
 ### EasyDatas.Core.RawDatas
 Base class for ListFile, RecursionFiles. RawDatas needs no previous dataset and the `deal_datas` function needs to be overrided
+
+### EasyDatas.Core.ParallelCachedTransform
+Automatically use multiprocessing to deal datas parallelly. The easiest way to use ParallelCachedTransform is to override `deal_a_data` function. The defult number of workers(processes) is the half of the CPU cores. Use `{"workers" : n}` to change the number of workers when it init. The `"workers"` in args will not effect the cache name.
 
 ### EasyDatas.Core.Merge
 Merge multiple EasyDatas modules by merge their data dict. The modules need to have the same length.

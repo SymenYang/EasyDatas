@@ -2,7 +2,7 @@ import multiprocessing
 from typing import Dict, Iterable,List
 from EasyDatas.Core.Base import EasyDatasBase
 from abc import abstractmethod
-import collections
+from collections.abc import Hashable
 import hashlib
 
 class RawDatas(EasyDatasBase):
@@ -21,7 +21,9 @@ class Transform(EasyDatasBase):
 
     def deal_datas(self):
         assert self.previous is not None, "Dataset {} needs a previous dataset".format(self.__class__.__name__)
-        self.data_length = len(self.previous)
+    
+    def __len__(self):
+        return len(self.previous)
     
     def __getitem__(self, idx):
         assert self.finished, "Please use {} after {}.resolve()".format(self.__class__.__name__,self.__class__.__name__)
@@ -79,7 +81,7 @@ class ParallelCachedTransform(CachedTransform):
             self.after_dealing(start + i, start, length, rank)
             if out_data is not None:
                 self.put(out_data)
-        return self._EasyDatasBase__datas
+        return self._EasyDatasBase__datas[:self.data_length]
 
     def deal_datas(self, backend : str = "multiprocessing"):
         from joblib import Parallel, delayed
@@ -99,7 +101,8 @@ class ParallelCachedTransform(CachedTransform):
         import itertools
         self._EasyDatasBase__datas = list(itertools.chain(*datas))
         self.data_length = len(self._EasyDatasBase__datas)
-
+    
+    @abstractmethod
     def deal_a_data(self, data):
         return super().deal_a_data(data)
 
@@ -110,8 +113,7 @@ class Chain(EasyDatasBase):
         assert not self.need_cache, "Chain should not have cache."
         assert len(self.chain) > 0, "Empty chain was given to {}.".format(self.__class__.__name__)
         for idx in range(1,len(self.chain)):
-            if self.chain[idx].need_previous:
-                self.chain[idx].previous = self.chain[idx - 1]
+            self.chain[idx].previous = self.chain[idx - 1]
         self.stop_idx = -1
 
         self._previous : EasyDatasBase = None
@@ -185,21 +187,16 @@ class Merge(EasyDatasBase):
         name_lists = []
         for key in name_args:
             value = name_args[key]
-            if isinstance(value, list):
-                value = tuple(value)
-            assert isinstance(value,collections.Hashable), "Values for key {} in name args need to be hashable".format(key)
-            name_lists.append((key,value))
+            assert isinstance(value,Hashable), "Values for key {} in name args need to be hashable".format(key)
+            name_lists.append((str(key),value))
         name_lists.sort(key = lambda x : x[0])
         name_str = ""
         for item in name_lists:
             name_str = name_str + "-" + str(item[0]) + "_" + str(item[1])
 
-        if self.args["readable"]:
-            pass
-        else:
-            md5 = hashlib.md5()
-            md5.update(name_str.encode("utf-8"))
-            name_str = "-" + str(md5.hexdigest())
+        md5 = hashlib.md5()
+        md5.update(name_str.encode("utf-8"))
+        name_str = "-" + str(md5.hexdigest())
 
         name_str = self.__class__.__name__ + name_str
 
