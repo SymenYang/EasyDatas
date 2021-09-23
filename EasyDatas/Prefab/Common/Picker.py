@@ -1,6 +1,8 @@
 from EasyDatas.Core import EasyDatasBase
 import inspect
 import hashlib
+import logging
+from pathlib import Path
 
 class Picker(EasyDatasBase):
     def get_func_name(self, func):
@@ -42,9 +44,5 @@ class Picker(EasyDatasBase):
         length = len(self.previous)
         g = globals()
         for i in range(length):
-            if self.get_global_func()(self.previous[i],i,length):
-                self.put({"idx" : i})
-    
-    def __getitem__(self, idx):
-        assert self.finished, "Please use {} after {}.resolve()".format(self.__class__.__name__,self.__class__.__name__)
-        return self.previous[super().__getitem__(idx)["idx"]]
+            if self.get_global_func()(self.get(i, False),i,length):
+                self.put(self.get(i, False))
